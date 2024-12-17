@@ -1,0 +1,19 @@
+{
+    "authors": [
+        {
+            "name": "Codexpert",
+            "email": "hi@codexpert.io"
+        }
+    ],
+    "require": {
+        "codexpert/plugin": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "Codexpert\\WeatherWithApi\\" : "classes/",
+            "Codexpert\\WeatherWithApi\\App\\" : "app/",
+            "Codexpert\\WeatherWithApi\\API\\" : "api/"
+        },
+        "files": [ "inc/functions.php" ]
+    }
+}
