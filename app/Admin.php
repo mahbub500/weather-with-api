@@ -73,6 +73,32 @@ class Admin extends Base {
 		return sprintf( __( 'Built with %1$s by the folks at <a href="%2$s" target="_blank">Codexpert, Inc</a>.' ), '&hearts;', 'https://codexpert.io' );
 	}
 
+	public function register_custom_post_type() {
+        $labels = [
+            'name' 				=> 'API Data',
+            'singular_name' 	=> 'API Data',
+            'add_new' 			=> 'Add New',
+            'add_new_item' 		=> 'Add New API Data',
+            'edit_item' 		=> 'Edit API Data',
+            'new_item' 			=> 'New API Data',
+            'view_item' 		=> 'View API Data',
+            'search_items' 		=> 'Search API Data',
+            'not_found' 		=> 'No API Data found',
+            'not_found_in_trash' => 'No API Data found in Trash',
+            'all_items' 		=> 'All API Data',
+        ];
+
+        $args = [
+            'labels' => $labels,
+            'public' => true,
+            'has_archive' => true,
+            'supports' => [ 'title', 'editor' ],
+            'show_in_rest' => true,
+        ];
+
+        register_post_type( 'api_data', $args );
+    }
+
 	public function modal() {
 		echo '
 		<div id="weather-with-api-modal" style="display: none">

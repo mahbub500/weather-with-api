@@ -137,6 +137,8 @@ final class Plugin {
 			$admin->action( 'plugins_loaded', 'i18n' );
 			$admin->action( 'admin_enqueue_scripts', 'enqueue_scripts' );
 			$admin->action( 'admin_footer_text', 'footer_text' );
+			$admin->action( 'init', 'register_custom_post_type' );
+			$admin->action( 'admin_menu', 'register_fetch_data_page' );
 
 			/**
 			 * Settings related hooks
