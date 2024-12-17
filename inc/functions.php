@@ -17,3 +17,4 @@ function weatherapit_site_url() {
 	return $url;
 }
 endif;
+

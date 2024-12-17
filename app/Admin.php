@@ -99,6 +99,79 @@ class Admin extends Base {
         register_post_type( 'api_data', $args );
     }
 
+    public function register_fetch_data_page() {
+        add_submenu_page(
+            'tools.php',
+            'Fetch API Data',
+            'Fetch API Data',
+            'manage_options',
+            'fetch-api-data',
+            [ $this, 'fetch_data_page_html' ]
+        );
+    }
+
+     public function fetch_data_page_html() {
+        ?>
+        <div class="wrap">
+            <h1>Fetch API Data</h1>
+            <form action="<?php echo admin_url( 'admin-post.php' ); ?>" method="post">
+                <input type="hidden" name="action" value="fetch_api_data">
+                <button type="submit" class="button button-primary">Fetch Data</button>
+            </form>
+        </div>
+        <?php
+    }
+
+     public function fetch_api_data() {
+        $this->fetch_data_from_api();
+        wp_redirect( admin_url( 'edit.php?post_type=' . 'api_data' ) );
+        exit;
+    }
+
+    private function fetch_data_from_api() {
+        $api_url = 'https://api.coindesk.com/v1/bpi/currentprice.json';
+
+        $response = wp_remote_get( $api_url );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'Failed to fetch API data: ' . $response->get_error_message() );
+            return;
+        }
+
+        $data = wp_remote_retrieve_body( $response );
+        $decoded_data = json_decode( $data, true );
+
+        if ( empty( $decoded_data ) ) {
+            error_log( 'Invalid API response.' );
+            return;
+        }
+
+        $title = $decoded_data['chartName'] ?? 'Unknown Data';
+        $content = wp_json_encode( $decoded_data, JSON_PRETTY_PRINT );
+        $existing_post = get_posts([
+            'post_type' => 'api_data',
+            'title' => $title,
+            'posts_per_page' => 1,
+        ]);
+
+        $post_data = [
+            'post_title' 	=> $title,
+            'post_content' 	=> $content,
+            'post_type' 	=> 'api_data',
+            'post_status' 	=> 'publish',
+            'meta_input' 	=> [
+                'date_retrieved' => current_time( 'mysql' ),
+            ],
+        ];
+
+        if ( $existing_post ) {
+            $post_data['ID'] = $existing_post[0]->ID;
+            wp_update_post( $post_data );
+        } else {
+            wp_insert_post( $post_data );
+        }
+    }
+
 	public function modal() {
 		echo '
 		<div id="weather-with-api-modal" style="display: none">
