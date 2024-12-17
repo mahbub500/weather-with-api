@@ -1,225 +1,198 @@
 <?php
 /**
- * Plugin Name: weather-with-api
- * Description: This is weather api plugin
- * Plugin URI: https://codexpert.io
- * Author: Codexpert, Inc
- * Author URI: https://codexpert.io
- * Version: 0.9
- * Text Domain: weather-with-api
- * Domain Path: /languages
+ * Plugin Name: API Data Fetcher
+ * Description: Fetch data from a public API and store it in a custom post type.
+ * Version: 1.0.2
+ * Author: Mahbub
  */
 
-namespace Codexpert\WeatherWithApi;
-use Codexpert\Plugin\Notice;
-
-/**
- * if accessed directly, exit.
- */
 if ( ! defined( 'ABSPATH' ) ) {
-	exit;
+    exit; // Exit if accessed directly.
 }
 
-/**
- * Main class for the plugin
- * @package Plugin
- * @author Codexpert <hi@codexpert.io>
- */
-final class Plugin {
-	
-	/**
-	 * Plugin instance
-	 * 
-	 * @access private
-	 * 
-	 * @var Plugin
-	 */
-	private static $_instance;
+class API_Data_Fetcher {
 
-	/**
-	 * The constructor method
-	 * 
-	 * @access private
-	 * 
-	 * @since 0.9
-	 */
-	private function __construct() {
-		/**
-		 * Includes required files
-		 */
-		$this->include();
+    const POST_TYPE = 'api_data';
 
-		/**
-		 * Defines contants
-		 */
-		$this->define();
+    public function __construct() {
+        add_action( 'init', [ $this, 'register_custom_post_type' ] );
+        add_action( 'admin_menu', [ $this, 'register_fetch_data_page' ] );
+        add_action( 'admin_post_fetch_api_data', [ $this, 'fetch_api_data' ] );
+        add_action( 'wp', [ $this, 'schedule_cron_event' ] );
+        add_action( 'api_data_fetch_cron', [ $this, 'fetch_api_data_cron' ] );
+        add_shortcode( 'display_latest_api_data', [ $this, 'display_latest_api_data' ] );
+    }
 
-		/**
-		 * Runs actual hooks
-		 */
-		$this->hook();
-	}
+    public function register_custom_post_type() {
+        $labels = [
+            'name' => 'API Data',
+            'singular_name' => 'API Data',
+            'add_new' => 'Add New',
+            'add_new_item' => 'Add New API Data',
+            'edit_item' => 'Edit API Data',
+            'new_item' => 'New API Data',
+            'view_item' => 'View API Data',
+            'search_items' => 'Search API Data',
+            'not_found' => 'No API Data found',
+            'not_found_in_trash' => 'No API Data found in Trash',
+            'all_items' => 'All API Data',
+        ];
 
-	/**
-	 * Includes files
-	 * 
-	 * @access private
-	 * 
-	 * @uses composer
-	 * @uses psr-4
-	 */
-	private function include() {
-		require_once( dirname( __FILE__ ) . '/vendor/autoload.php' );
-	}
+        $args = [
+            'labels' => $labels,
+            'public' => true,
+            'has_archive' => true,
+            'supports' => [ 'title', 'editor' ],
+            'show_in_rest' => true,
+        ];
 
-	/**
-	 * Define variables and constants
-	 * 
-	 * @access private
-	 * 
-	 * @uses get_plugin_data
-	 * @uses plugin_basename
-	 */
-	private function define() {
+        register_post_type( self::POST_TYPE, $args );
+    }
 
-		/**
-		 * Define some constants
-		 * 
-		 * @since 0.9
-		 */
-		define( 'Weather_With_Api', __FILE__ );
-		define( 'Weather_With_Api_DIR', dirname( Weather_With_Api ) );
-		define( 'Weather_With_Api_ASSET', plugins_url( 'assets', Weather_With_Api ) );
-		define( 'Weather_With_Api_DEBUG', apply_filters( 'weather-with-api_debug', true ) );
+    public function register_fetch_data_page() {
+        add_submenu_page(
+            'tools.php',
+            'Fetch API Data',
+            'Fetch API Data',
+            'manage_options',
+            'fetch-api-data',
+            [ $this, 'fetch_data_page_html' ]
+        );
+    }
 
-		/**
-		 * The plugin data
-		 * 
-		 * @since 0.9
-		 * @var $plugin
-		 */
-		$this->plugin					= get_plugin_data( Weather_With_Api );
-		$this->plugin['basename']		= plugin_basename( Weather_With_Api );
-		$this->plugin['file']			= Weather_With_Api;
-		$this->plugin['server']			= apply_filters( 'weather-with-api_server', 'https://codexpert.io/dashboard' );
-		$this->plugin['min_php']		= '5.6';
-		$this->plugin['min_wp']			= '4.0';
-		$this->plugin['icon']			= Weather_With_Api_ASSET . '/img/icon.png';
-		$this->plugin['depends']		= [ 'woocommerce/woocommerce.php' => 'WooCommerce' ];
-		
-	}
+    public function fetch_data_page_html() {
+        ?>
+        <div class="wrap">
+            <h1>Fetch API Data</h1>
+            <form action="<?php echo admin_url( 'admin-post.php' ); ?>" method="post">
+                <input type="hidden" name="action" value="fetch_api_data">
+                <button type="submit" class="button button-primary">Fetch Data</button>
+            </form>
+        </div>
+        <?php
+    }
 
-	/**
-	 * Hooks
-	 * 
-	 * @access private
-	 * 
-	 * Executes main plugin features
-	 *
-	 * To add an action, use $instance->action()
-	 * To apply a filter, use $instance->filter()
-	 * To register a shortcode, use $instance->register()
-	 * To add a hook for logged in users, use $instance->priv()
-	 * To add a hook for non-logged in users, use $instance->nopriv()
-	 * 
-	 * @return void
-	 */
-	private function hook() {
+    public function fetch_api_data() {
+        $this->fetch_data_from_api();
+        wp_redirect( admin_url( 'edit.php?post_type=' . self::POST_TYPE ) );
+        exit;
+    }
 
-		if( is_admin() ) :
+    public function fetch_api_data_cron() {
+        $this->fetch_data_from_api();
+    }
 
-			/**
-			 * Admin facing hooks
-			 */
-			$admin = new App\Admin( $this->plugin );
-			$admin->activate( 'install' );
-			$admin->action( 'admin_footer', 'modal' );
-			$admin->action( 'plugins_loaded', 'i18n' );
-			$admin->action( 'admin_enqueue_scripts', 'enqueue_scripts' );
-			$admin->action( 'admin_footer_text', 'footer_text' );
-			$admin->action( 'init', 'register_custom_post_type' );
-			$admin->action( 'admin_menu', 'register_fetch_data_page' );
+    private function fetch_data_from_api() {
+        $api_url = 'https://api.coindesk.com/v1/bpi/currentprice.json';
 
-			/**
-			 * Settings related hooks
-			 */
-			$settings = new App\Settings( $this->plugin );
-			$settings->action( 'plugins_loaded', 'init_menu' );
+        $response = wp_remote_get( $api_url );
 
-			/**
-			 * Renders different notices
-			 * 
-			 * @package Codexpert\Plugin
-			 * 
-			 * @author Codexpert <hi@codexpert.io>
-			 */
-			$notice = new Notice( $this->plugin );
+        if ( is_wp_error( $response ) ) {
+            error_log( 'Failed to fetch API data: ' . $response->get_error_message() );
+            return;
+        }
 
-		else : // ! is_admin() ?
+        $data = wp_remote_retrieve_body( $response );
+        $decoded_data = json_decode( $data, true );
 
-			/**
-			 * Front facing hooks
-			 */
-			$front = new App\Front( $this->plugin );
-			$front->action( 'wp_head', 'head' );
-			$front->action( 'wp_footer', 'modal' );
-			$front->action( 'wp_enqueue_scripts', 'enqueue_scripts' );
+        if ( empty( $decoded_data ) ) {
+            error_log( 'Invalid API response.' );
+            return;
+        }
 
-			/**
-			 * Shortcode related hooks
-			 */
-			$shortcode = new App\Shortcode( $this->plugin );
-			$shortcode->register( 'my_shortcode', 'my_shortcode' );
+        $title = $decoded_data['chartName'] ?? 'Unknown Data';
+        $content = wp_json_encode( $decoded_data, JSON_PRETTY_PRINT );
+        $existing_post = get_posts([
+            'post_type' => self::POST_TYPE,
+            'title' => $title,
+            'posts_per_page' => 1,
+        ]);
 
-		endif;
+        $post_data = [
+            'post_title' => $title,
+            'post_content' => $content,
+            'post_type' => self::POST_TYPE,
+            'post_status' => 'publish',
+            'meta_input' => [
+                'date_retrieved' => current_time( 'mysql' ),
+            ],
+        ];
 
-		/**
-		 * Cron facing hooks
-		 */
-		$cron = new App\Cron( $this->plugin );
-		$cron->activate( 'install' );
-		$cron->deactivate( 'uninstall' );
+        if ( $existing_post ) {
+            $post_data['ID'] = $existing_post[0]->ID;
+            wp_update_post( $post_data );
+        } else {
+            wp_insert_post( $post_data );
+        }
+    }
 
-		/**
-		 * Common hooks
-		 *
-		 * Executes on both the admin area and front area
-		 */
-		$common = new App\Common( $this->plugin );
+    public function schedule_cron_event() {
+        if ( ! wp_next_scheduled( 'api_data_fetch_cron' ) ) {
+            wp_schedule_event( time(), 'every_30_minutes', 'api_data_fetch_cron' );
+        }
+    }
 
-		/**
-		 * AJAX related hooks
-		 */
-		$ajax = new App\AJAX( $this->plugin );
-	}
+    public function display_latest_api_data() {
+        $query = new WP_Query([
+            'post_type' => self::POST_TYPE,
+            'posts_per_page' => 1,
+            'orderby' => 'meta_value',
+            'meta_key' => 'date_retrieved',
+            'order' => 'DESC',
+        ]);
 
-	/**
-	 * Cloning is forbidden.
-	 * 
-	 * @access public
-	 */
-	public function __clone() { }
-
-	/**
-	 * Unserializing instances of this class is forbidden.
-	 * 
-	 * @access public
-	 */
-	public function __wakeup() { }
-
-	/**
-	 * Instantiate the plugin
-	 * 
-	 * @access public
-	 * 
-	 * @return $_instance
-	 */
-	public static function instance() {
-		if ( is_null( self::$_instance ) ) {
-			self::$_instance = new self();
-		}
-		return self::$_instance;
-	}
+        if ( $query->have_posts() ) {
+            ob_start();
+            while ( $query->have_posts() ) {
+                $query->the_post();
+                $date_retrieved = get_post_meta( get_the_ID(), 'date_retrieved', true );
+                ?>
+                <div class="api-data">
+                    <h2><?php the_title(); ?></h2>
+                    <div class="content">
+                        <pre><?php echo esc_html( get_the_content() ); ?></pre>
+                    </div>
+                    <p><strong>Date Retrieved:</strong> <?php echo esc_html( $date_retrieved ); ?></p>
+                </div>
+                <?php
+            }
+            wp_reset_postdata();
+            return ob_get_clean();
+        } else {
+            return '<p>No data available.</p>';
+        }
+    }
 }
 
-Plugin::instance();
+new API_Data_Fetcher();
+
+// Add meta box for "Date Retrieved"
+add_action( 'add_meta_boxes', function() {
+    add_meta_box(
+        'date_retrieved',
+        'Date Retrieved',
+        function( $post ) {
+            $date_retrieved = get_post_meta( $post->ID, 'date_retrieved', true );
+            echo '<p>' . esc_html( $date_retrieved ) . '</p>';
+        },
+        'api_data',
+        'side'
+    );
+});
+
+// Register custom interval for wp_cron
+add_filter( 'cron_schedules', function( $schedules ) {
+    $schedules['every_30_minutes'] = [
+        'interval' => 1800,
+        'display' => 'Every 30 Minutes'
+    ];
+    return $schedules;
+} );
+
+// Unschedule the event on plugin deactivation
+register_deactivation_hook( __FILE__, function() {
+    $timestamp = wp_next_scheduled( 'api_data_fetch_cron' );
+    if ( $timestamp ) {
+        wp_unschedule_event( $timestamp, 'api_data_fetch_cron' );
+    }
+});
